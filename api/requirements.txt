@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+httpx
+psycopg2-binary
+requests
+python-multipart
+PyJWT==2.8.0
+email-validator

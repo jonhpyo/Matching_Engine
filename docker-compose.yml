@@ -1,0 +1,33 @@
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    container_name: matching-engine
+    ports:
+      - "9000:9000"
+    environment:
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=myhts
+      - DB_USER=myhts
+      - DB_PASSWORD=myhts_pw
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: matching-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENGINE_URL=http://engine:9000
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=myhts
+      - DB_USER=myhts
+      - DB_PASSWORD=myhts_pw
+    depends_on:
+      - engine
+    restart: unless-stopped
