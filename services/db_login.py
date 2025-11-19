@@ -104,40 +104,5 @@ class LoginDB:
                 print("[LoginDB] generate_account_no:", acc)
                 return acc
 
-    def create_account(self, user_id: int, name: str = "") -> str | None:
-        """
-        계좌 개설 (기본잔액: 환경변수 INITIAL_CASH, 없으면 10,000,000)
-        """
-        default_balance = Decimal(os.getenv("INITIAL_CASH", "10000000"))
-        account_no = self._generate_account_no()
-
-        with self.conn.cursor() as cur:
-            try:
-                cur.execute(
-                    """
-                    INSERT INTO accounts
-                        (user_id, account_no, name, balance, created_at)
-                    VALUES
-                        (%s, %s, %s, %s, now());
-                    """,
-                    (user_id, account_no, name, default_balance),
-                )
-                return account_no
-            except psycopg2.Error as e:
-                print("create_account error:", e)
-                return None
-
-    def get_primary_account_id(self, user_id: int) -> int | None:
-        """
-        해당 유저의 첫 번째 계좌 id
-        """
-        with self.conn.cursor() as cur:
-            cur.execute(
-                "SELECT id FROM accounts WHERE user_id=%s ORDER BY id LIMIT 1;",
-                (user_id,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else None
-
     def close(self):
         self.conn.close()

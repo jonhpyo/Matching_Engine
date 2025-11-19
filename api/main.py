@@ -5,14 +5,24 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 import jwt
-from api.auth import get_current_user, UserInfo
+
+from api.account_api import create_account_router
+from api.auth_api import get_current_user, UserInfo
+from api.trade_api import create_trade_router
+from repositories.account_repository import AccountRepository
+from repositories.order_repository import OrderRepository
+from repositories.trade_repositories import TradeRepository
+from services.account_service import AccountService
 from services.db_login import LoginDB
 from fastapi import status
 from datetime import datetime, timedelta
-
+from api.order_api import create_order_router
+from api.orderbook_api import create_orderbook_router
 from services.db_matching import MatchingDB
+from services.matching_engine import MatchingEngine
+from services.trade_service import TradeService
 
-ENGINE_URL = os.getenv("ENGINE_URL", "http://engine:9000")
+ENGINE_URL = os.getenv("ENGINE_URL", "http://127.0.0.1:9000")
 SECRET = "MYHTS_SECRET_KEY"
 
 app = FastAPI(
@@ -28,6 +38,23 @@ db = LoginDB(
     password=os.getenv("DB_PASSWORD", "myhts_pw"),
     port=int(os.getenv("DB_PORT", "5432")),
 )
+
+matchingDb = MatchingDB()
+conn = matchingDb.conn
+
+order_repo = OrderRepository(conn)
+trade_repo = TradeRepository(conn)
+account_repo = AccountRepository(conn)
+
+# order_service = OrderService(order_repo, trade_repo)
+account_service = AccountService(account_repo)
+trade_service = TradeService(trade_repo)
+matching_engine = MatchingEngine(order_repo, trade_repo, account_service)
+
+app.include_router(create_order_router(order_repo, trade_repo, matching_engine))
+app.include_router(create_trade_router(trade_repo, trade_service))
+app.include_router(create_account_router(account_repo, account_service))
+app.include_router(create_orderbook_router(matching_engine))  # ← 추가
 
 class Token(BaseModel):
     access_token: str
@@ -90,11 +117,9 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user_id = user
-    current_user = form.username
-
     payload = {
         "user_id": user_id,
-        "email": current_user,
+        "email": form.username,
         "exp": datetime.utcnow() + timedelta(hours=12)
     }
     token = jwt.encode(payload, SECRET, algorithm="HS256")
@@ -103,7 +128,8 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
 
 @app.get("/me")
 def read_me(current_user: int = Depends(get_current_user)):
-    return {"email": current_user}
+    # return {"email": current_user}
+    return current_user
 
 @app.post("/signup", response_model=SignupResponse)
 def signup(req: SignupRequest):
@@ -153,19 +179,19 @@ def signup(req: SignupRequest):
 @app.post("/accounts/create", response_model=CreateAccountResponse)
 def create_account(
     req: CreateAccountRequest,
-    user_id=Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     db = LoginDB()
     account_name = req.account_name or ""
 
-    account_no = db.create_account(user_id, account_name)
+    account_no = db.create_account(user.user_id, account_name)
     if not account_no:
         raise HTTPException(
             status_code=500, detail="계좌 개설에 실패했습니다."
         )
 
     return CreateAccountResponse(
-        user_id=user_id,
+        user_id=user.user_id,
         account_no=account_no,
         account_name=account_name
     )
@@ -173,11 +199,11 @@ def create_account(
 @app.get("/trades/my", response_model=list[TradeItem])
 def get_my_trades(
     limit: int = 100,
-    user_id=Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
     try:
         match_db = MatchingDB()
-        rows = match_db.get_trades_by_user(user_id, limit=limit)
+        rows = match_db.get_trades_by_user(current_user.user_id, limit=limit)
 
         return [
             TradeItem(

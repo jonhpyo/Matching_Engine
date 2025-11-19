@@ -2,7 +2,7 @@ services:
   engine:
     build:
       context: .
-      dockerfile: engine/Dockerfile
+      dockerfile: Dockerfile
     container_name: matching-engine
     ports:
       - "9000:9000"
@@ -17,7 +17,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: api/Dockerfile
+      dockerfile: Dockerfile
     container_name: matching-api
     ports:
       - "8000:8000"
