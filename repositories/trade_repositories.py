@@ -1,8 +1,6 @@
 # repositories/trade_repositories.py
 
-import psycopg2
 from psycopg2.extras import DictCursor
-
 
 class TradeRepository:
     """
@@ -76,9 +74,9 @@ class TradeRepository:
         """
         try:
             with self.conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute(sql, (user_id, limit))
+                cur.execute(sql, {"user_id": user_id, "limit": limit})
                 return [dict(r) for r in cur.fetchall()]
         except Exception as e:
             print("[TradeRepository] get_trades_by_user error:", e)
-            return []
+            # return []
 

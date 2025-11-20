@@ -229,45 +229,45 @@ class MatchingDB:
             print("[MatchingDB] update_position_on_trade error:", e)
             raise
 
-    def get_trades_by_user(self, user_id: int, limit: int = 100):
-        """
-        trades 테이블 기준으로 특정 사용자의 체결내역 조회
-        - BUY 또는 SELL 주문 중 어느 한쪽이라도 user_id가 일치하면 포함
-        - UI용 컬럼: account_no, symbol, side, price, quantity, trade_time, remark
-        """
-        from psycopg2.extras import DictCursor
-
-        with self.conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute(
-                """
-                SELECT 
-                    a.account_no AS account_no,
-                    t.symbol      AS symbol,
-                    CASE
-                        WHEN ob.user_id = %(user_id)s THEN 'BUY'
-                        WHEN os.user_id = %(user_id)s THEN 'SELL'
-                        ELSE 'N/A'
-                    END AS side,
-                    t.price       AS price,
-                    t.quantity    AS quantity,
-                    t.trade_time  AS trade_time,
-                    ''::text      AS remark
-                FROM trades t
-                JOIN orders ob ON t.buy_order_id  = ob.id
-                JOIN orders os ON t.sell_order_id = os.id
-                JOIN accounts a ON (
-                    (ob.user_id = %(user_id)s AND ob.account_id = a.id)
-                    OR (os.user_id = %(user_id)s AND os.account_id = a.id)
-                )
-                WHERE ob.user_id = %(user_id)s OR os.user_id = %(user_id)s
-                ORDER BY t.trade_time DESC
-                LIMIT %(limit)s;
-                """,
-                {"user_id": user_id, "limit": limit},
-            )
-            rows = cur.fetchall()
-            print(f"[DBService] get_trades_by_user({user_id}) -> {len(rows)} rows")
-            return rows
+    # def get_trades_by_user(self, user_id: int, limit: int = 100):
+    #     """
+    #     trades 테이블 기준으로 특정 사용자의 체결내역 조회
+    #     - BUY 또는 SELL 주문 중 어느 한쪽이라도 user_id가 일치하면 포함
+    #     - UI용 컬럼: account_no, symbol, side, price, quantity, trade_time, remark
+    #     """
+    #     from psycopg2.extras import DictCursor
+    #
+    #     with self.conn.cursor(cursor_factory=DictCursor) as cur:
+    #         cur.execute(
+    #             """
+    #             SELECT
+    #                 a.account_no AS account_no,
+    #                 t.symbol      AS symbol,
+    #                 CASE
+    #                     WHEN ob.user_id = %(user_id)s THEN 'BUY'
+    #                     WHEN os.user_id = %(user_id)s THEN 'SELL'
+    #                     ELSE 'N/A'
+    #                 END AS side,
+    #                 t.price       AS price,
+    #                 t.quantity    AS quantity,
+    #                 t.trade_time  AS trade_time,
+    #                 ''::text      AS remark
+    #             FROM trades t
+    #             JOIN orders ob ON t.buy_order_id  = ob.id
+    #             JOIN orders os ON t.sell_order_id = os.id
+    #             JOIN accounts a ON (
+    #                 (ob.user_id = %(user_id)s AND ob.account_id = a.id)
+    #                 OR (os.user_id = %(user_id)s AND os.account_id = a.id)
+    #             )
+    #             WHERE ob.user_id = %(user_id)s OR os.user_id = %(user_id)s
+    #             ORDER BY t.trade_time DESC
+    #             LIMIT %(limit)s;
+    #             """,
+    #             {"user_id": user_id, "limit": limit},
+    #         )
+    #         rows = cur.fetchall()
+    #         print(f"[DBService] get_trades_by_user({user_id}) -> {len(rows)} rows")
+    #         return rows
 
     def commit(self):
         self.conn.commit()

@@ -7,6 +7,71 @@ class OrderRepository:
     def __init__(self, conn):
         self.conn = conn
 
+    def bucket_by_price(self, symbol: str):
+        sql = """
+            SELECT price, side, SUM(remaining_qty) AS qty, COUNT(*) AS cnt
+            FROM orders
+            WHERE symbol = %s
+              AND remaining_qty > 0
+            GROUP BY price, side
+        """
+        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute(sql, (symbol,))
+            return cur.fetchall()
+
+    # repositories/order_repository.py
+
+    def get_price_stats(self, symbol):
+        sql = """
+            SELECT price,
+                   SUM(remaining_qty) AS qty,
+                   COUNT(*) AS cnt
+            FROM orders
+            WHERE symbol = %s
+              AND status IN ('WORKING', 'PARTIAL')
+            GROUP BY price
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql, (symbol,))
+                rows = cur.fetchall()
+
+            result = {}
+            for price, qty, cnt in rows:
+                result[str(price)] = {
+                    "qty": float(qty),
+                    "cnt": int(cnt)
+                }
+
+            return result
+
+        except Exception as e:
+            print("[OrderRepository] get_price_stats error:", e)
+            return {}
+
+    # repositories/order_repository.py (추가)
+
+    def get_grouped_orderbook(self, symbol: str):
+        sql = """
+            SELECT side,
+                   price,
+                   SUM(remaining_qty) AS qty,
+                   COUNT(*) AS cnt
+            FROM orders
+            WHERE symbol = %s
+              AND status IN ('WORKING','PARTIAL')
+              AND remaining_qty > 0
+            GROUP BY side, price
+        """
+        try:
+            with self.conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(sql, (symbol,))
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            print("[OrderRepository] get_grouped_orderbook error:", e)
+            return []
+
+
     # -------------------------------------------
     # 신규 주문 삽입
     # -------------------------------------------
@@ -35,24 +100,29 @@ class OrderRepository:
     # -------------------------------------------
     # 주문 조회 (MatchingEngine 용)
     # -------------------------------------------
-    def get_order(self, order_id: int):
-        """
-        order_id → 주문 dict
-        MatchingEngine이 매칭할 때 필수!
-        """
+    def get_order(self, order_id):
         with self.conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute(
-                """
-                SELECT id, user_id, account_id, symbol, side,
-                       price, quantity, remaining_qty, status,
-                       created_at, updated_at
+            cur.execute("""
+                SELECT id, user_id, account_id, symbol, side, price,
+                       quantity, remaining_qty, status, created_at
                 FROM orders
-                WHERE id = %s;
-                """,
-                (order_id,)
-            )
-            row = cur.fetchone()
-            return dict(row) if row else None
+                WHERE id = %s
+            """, (order_id,))
+            r = cur.fetchone()
+            if not r:
+                return None
+
+            # 매칭엔진이 요구하는 dict 형태로 표준화
+            return {
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "account_id": r["account_id"],
+                "symbol": r["symbol"].upper(),
+                "side": r["side"].upper(),
+                "price": float(r["price"]),
+                "remaining_qty": float(r["remaining_qty"]),
+                "qty": float(r["quantity"]),  # optional
+            }
 
     # -------------------------------------------
     # 잔량 / 상태 업데이트

@@ -41,13 +41,15 @@ class OrderService:
         2) 매칭엔진에 전달
         3) 체결 결과 반환
         """
-        order_id = self.place_order(
+        order_id = self.order_repo.insert_order(
             user_id=user_id,
             account_id=account_id,
-            symbol=symbol,
-            side=side,
+            symbol=symbol.upper(),
+            side=side.upper(),
             price=price,
-            qty=qty
+            quantity=qty,
+            remaining_qty=qty,
+            status="WORKING"
         )
 
         if not order_id:
